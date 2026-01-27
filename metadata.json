@@ -1,0 +1,5 @@
+{
+  "name": "Secure Login Portal",
+  "description": "A simple and elegant login page featuring multiple account types including Super Admin, Station, and CHQ accounts, built with Angular and styled with Tailwind CSS.",
+  "requestFramePermissions": []
+}

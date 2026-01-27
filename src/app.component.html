@@ -1,0 +1,5 @@
+@if (!currentUser()) {
+  <app-login (loginSuccess)="handleLogin($event)"></app-login>
+} @else {
+  <app-dashboard [user]="currentUser()!" (logout)="handleLogout()"></app-dashboard>
+}
