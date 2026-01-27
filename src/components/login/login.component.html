@@ -4,7 +4,7 @@
       <svg class="w-16 h-16 mx-auto text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
       </svg>
-      <h2 class="mt-4 text-3xl font-bold text-gray-900 dark:text-white">Secure Portal</h2>
+      <h2 class="mt-4 text-3xl font-bold text-gray-900 dark:text-white">Secure Portal (HMR Test)</h2>
       <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Please sign in to your account</p>
     </div>
 
@@ -33,18 +33,4 @@
       }
 
       <div>
-        <button type="submit" [disabled]="loginForm.invalid || isLoading()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 disabled:bg-indigo-400 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed transition-colors duration-300">
-          @if (isLoading()) {
-            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Signing In...</span>
-          } @else {
-            <span>Sign In</span>
-          }
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
+        <button type="submit" [disabled]="loginForm.invalid || isLoading()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-
