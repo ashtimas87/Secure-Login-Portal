@@ -1,16 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { User } from '../../app.component';
 import { OperationalDashboardComponent } from '../operational-dashboard/operational-dashboard.component';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { TacticalDashboardComponent } from '../tactical-dashboard/tactical-dashboard.component';
-
-export interface ManagedAccount {
-  id: number;
-  name: string;
-  username: string;
-  password?: string;
-}
+import { AccountService, ManagedAccount } from '../../services/account.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -25,14 +19,21 @@ export class DashboardComponent {
   user = input.required<User>();
   logout = output<void>();
 
+  private accountService = inject(AccountService);
+  private fb: FormBuilder = inject(FormBuilder);
+
+  canManageAccounts = computed(() => this.user()?.type === 'Super Admin');
+
+  isDashboardView = computed(() => this.currentView() === 'operationalDashboard' || this.currentView() === 'tacticalDashboard');
+
   // State for the current view in the main panel
   currentView = signal<'welcome' | 'accountManagement' | 'operationalDashboard' | 'tacticalDashboard'>('welcome');
   deviceView = signal<'desktop' | 'tablet' | 'mobile'>('desktop');
 
-  // State for accounts
-  stationAccounts = signal<ManagedAccount[]>([]);
-  chqAccounts = signal<ManagedAccount[]>([]);
-  cpsmuAccounts = signal<ManagedAccount[]>([]);
+  // State for accounts from service
+  stationAccounts = this.accountService.stationAccounts;
+  chqAccounts = this.accountService.chqAccounts;
+  cpsmuAccounts = this.accountService.cpsmuAccounts;
 
   // Modal State
   isModalOpen = signal(false);
@@ -40,8 +41,6 @@ export class DashboardComponent {
   currentAccountForEdit = signal<ManagedAccount | null>(null);
   currentAccountType = signal<'station' | 'chq' | 'cpsmu' | null>(null);
 
-  // FIX: Explicitly type FormBuilder as it was not being correctly inferred.
-  private fb: FormBuilder = inject(FormBuilder);
   accountForm = this.fb.group({
     id: [0],
     name: ['', Validators.required],
@@ -50,29 +49,7 @@ export class DashboardComponent {
   });
 
   constructor() {
-    // Set initial device view
     this.onResize();
-
-    // Initialize with dummy data
-    this.stationAccounts.set(Array.from({ length: 11 }, (_, i) => {
-      const stationNumber = i + 1;
-      return {
-        id: Date.now() + i,
-        name: stationNumber === 11 ? 'cmfc' : `Station ${stationNumber}`,
-        username: `station_user_${stationNumber}`,
-        password: `station_pass_${stationNumber}`
-      };
-    }));
-    this.chqAccounts.set(Array.from({ length: 8 }, (_, i) => ({
-      id: Date.now() + 11 + i,
-      name: `CHQ Account ${i + 1}`,
-      username: `chq_user_${i+1}`,
-      password: `chq_pass_${i+1}`
-    })));
-    this.cpsmuAccounts.set([
-      { id: Date.now() + 20, name: 'CPSMU Admin 1', username: 'cpsmu_admin1', password: 'cpsmu_password1' },
-      { id: Date.now() + 21, name: 'CPSMU Admin 2', username: 'cpsmu_admin2', password: 'cpsmu_password2' }
-    ]);
   }
 
   onResize(): void {
@@ -95,7 +72,9 @@ export class DashboardComponent {
   }
 
   showAccountManagement(): void {
-    this.currentView.set('accountManagement');
+    if (this.canManageAccounts()) {
+      this.currentView.set('accountManagement');
+    }
   }
 
   showOperationalDashboard(): void {
@@ -115,7 +94,8 @@ export class DashboardComponent {
     passwordControl?.clearValidators();
 
     if (mode === 'create') {
-      this.accountForm.reset({ id: 0, name: 'Sample Account Name', username: 'station1', password: 'station1' });
+      const typeName = type === 'station' ? 'Station' : type === 'chq' ? 'CHQ' : 'CPSMU';
+      this.accountForm.reset({ id: 0, name: `New ${typeName} Account`, username: '', password: '' });
       passwordControl?.setValidators([Validators.required, Validators.minLength(6)]);
     } else if (account) {
       this.currentAccountForEdit.set(account);
@@ -153,23 +133,24 @@ export class DashboardComponent {
   }
 
   saveAccount(): void {
-    if (this.accountForm.invalid) {
+    if (this.accountForm.invalid || !this.canManageAccounts()) {
       return;
     }
 
     const formValue = this.accountForm.getRawValue();
     const type = this.currentAccountType();
-    
+    if (!type) return;
+
+    const typeName = type === 'station' ? 'Station Account' : type === 'chq' ? 'CHQ Account' : 'CPSMU Account';
+
     if (this.modalMode() === 'create') {
-        const newAccount: ManagedAccount = {
-            id: Date.now(),
+        const newAccountData = {
             name: formValue.name!,
             username: formValue.username!,
             password: formValue.password!,
+            type: typeName,
         };
-        if (type === 'station') this.stationAccounts.update(accs => [...accs, newAccount]);
-        if (type === 'chq') this.chqAccounts.update(accs => [...accs, newAccount]);
-        if (type === 'cpsmu') this.cpsmuAccounts.update(accs => [...accs, newAccount]);
+        this.accountService.addAccount(type, newAccountData);
     } else { // edit mode
         const originalAccount = this.currentAccountForEdit();
         if (!originalAccount) return;
@@ -181,48 +162,18 @@ export class DashboardComponent {
             password: (formValue.password && formValue.password.trim() !== '') ? formValue.password : originalAccount.password,
         };
         
-        if (type === 'station') {
-            this.stationAccounts.update(accs => accs.map(a => a.id === updatedAccount.id ? updatedAccount : a));
-        }
-        if (type === 'chq') {
-            this.chqAccounts.update(accs => accs.map(a => a.id === updatedAccount.id ? updatedAccount : a));
-        }
-        if (type === 'cpsmu') {
-            this.cpsmuAccounts.update(accs => accs.map(a => a.id === updatedAccount.id ? updatedAccount : a));
-        }
+        this.accountService.updateAccount(type, updatedAccount);
     }
 
     this.closeModal();
   }
-
-  // --- Refactored CRUD Methods ---
-  // Station CRUD
-  createStationAccount(): void { this.openModal('create', 'station'); }
-  viewStationAccount(account: ManagedAccount): void { this.openModal('view', 'station', account); }
-  editStationAccount(account: ManagedAccount): void { this.openModal('edit', 'station', account); }
-  deleteStationAccount(account: ManagedAccount): void {
-    if (confirm(`Are you sure you want to delete "${account.name}" (@${account.username})?`)) {
-      this.stationAccounts.update(accounts => accounts.filter(acc => acc.id !== account.id));
+  
+  deleteAccount(account: ManagedAccount, type: 'station' | 'chq' | 'cpsmu'): void {
+    if (!this.canManageAccounts()) return;
+    
+    if (!confirm(`Are you sure you want to delete "${account.name}" (@${account.username})?`)) {
+      return;
     }
-  }
-
-  // CHQ CRUD
-  createChqAccount(): void { this.openModal('create', 'chq'); }
-  viewChqAccount(account: ManagedAccount): void { this.openModal('view', 'chq', account); }
-  editChqAccount(account: ManagedAccount): void { this.openModal('edit', 'chq', account); }
-  deleteChqAccount(account: ManagedAccount): void {
-    if (confirm(`Are you sure you want to delete "${account.name}" (@${account.username})?`)) {
-      this.chqAccounts.update(accounts => accounts.filter(acc => acc.id !== account.id));
-    }
-  }
-
-  // CPSMU CRUD
-  createCpsmuAccount(): void { this.openModal('create', 'cpsmu'); }
-  viewCpsmuAccount(account: ManagedAccount): void { this.openModal('view', 'cpsmu', account); }
-  editCpsmuAccount(account: ManagedAccount): void { this.openModal('edit', 'cpsmu', account); }
-  deleteCpsmuAccount(account: ManagedAccount): void {
-    if (confirm(`Are you sure you want to delete "${account.name}" (@${account.username})?`)) {
-      this.cpsmuAccounts.update(accounts => accounts.filter(acc => acc.id !== account.id));
-    }
+    this.accountService.deleteAccount(type, account.id);
   }
 }

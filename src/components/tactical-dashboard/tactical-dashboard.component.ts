@@ -12,7 +12,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 })
 export class TacticalDashboardComponent {
   user = input.required<User>();
-  isSuperAdmin = computed(() => this.user().type === 'Super Admin');
+  canManage = computed(() => ['Super Admin', 'CPSMU Account'].includes(this.user().type));
 
   performanceIndicators = signal<PerformanceIndicator[]>([]);
   activeTab = signal(1);
@@ -123,12 +123,59 @@ export class TacticalDashboardComponent {
     this.editingTitle.set(false);
   }
 
+  startCreate(): void {
+    if (this.editingActivity()) {
+      this.cancelEdit();
+    }
+
+    const newActivity: Activity = {
+      id: Date.now(), // Temporary ID
+      name: '',
+      indicator: '',
+      accomplishments: { Jan: '', Feb: '', Mar: '', Apr: '', May: '', Jun: '', Jul: '', Aug: '', Sep: '', Oct: '', Nov: '', Dec: '' }
+    };
+
+    this.performanceIndicators.update(currentPIs => {
+      const pisCopy = JSON.parse(JSON.stringify(currentPIs));
+      const piToUpdate = pisCopy.find((p: PerformanceIndicator) => p.id === this.activeTab());
+      if (piToUpdate) {
+        piToUpdate.activities.push(newActivity);
+      }
+      return pisCopy;
+    });
+
+    this.editingActivity.set(newActivity);
+    this.activityForm.reset({
+      name: '',
+      indicator: '',
+      accomplishments: { Jan: '', Feb: '', Mar: '', Apr: '', May: '', Jun: '', Jul: '', Aug: '', Sep: '', Oct: '', Nov: '', Dec: '' }
+    });
+    this.activityForm.enable();
+  }
+
   startEdit(activity: Activity): void {
+    if (this.editingActivity()) {
+      this.cancelEdit();
+    }
     this.editingActivity.set(activity);
     this.activityForm.patchValue(activity);
+    this.activityForm.enable();
   }
 
   cancelEdit(): void {
+    const activityBeingEdited = this.editingActivity();
+    // Use a high number threshold to identify temporary IDs from Date.now()
+    if (activityBeingEdited && activityBeingEdited.id > 100000) { 
+      // This is a new activity that was cancelled, so remove it from the array.
+      this.performanceIndicators.update(currentPIs => {
+        const pisCopy = JSON.parse(JSON.stringify(currentPIs));
+        const piToUpdate = pisCopy.find((p: PerformanceIndicator) => p.id === this.activeTab());
+        if (piToUpdate) {
+          piToUpdate.activities = piToUpdate.activities.filter((a: Activity) => a.id !== activityBeingEdited.id);
+        }
+        return pisCopy;
+      });
+    }
     this.editingActivity.set(null);
     this.activityForm.reset();
   }
@@ -147,7 +194,9 @@ export class TacticalDashboardComponent {
         const activityIndex = piToUpdate.activities.findIndex((a: Activity) => a.id === originalActivityId);
         if (activityIndex > -1) {
           const originalActivity = piToUpdate.activities[activityIndex];
-          piToUpdate.activities[activityIndex] = { ...originalActivity, ...updatedActivityData };
+          // For new items, the ID will be replaced by processPiData
+          const finalId = originalActivity.id > 100000 ? 0 : originalActivity.id; 
+          piToUpdate.activities[activityIndex] = { ...originalActivity, ...updatedActivityData, id: finalId };
         }
       }
       return this.processPiData(pisCopy);

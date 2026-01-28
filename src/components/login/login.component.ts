@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { DashboardComponent, ManagedAccount } from '../dashboard/dashboard.component';
+import { AccountService, ManagedAccount } from '../../services/account.service';
 
 @Component({
   selector: 'app-login',
@@ -12,17 +12,11 @@ import { DashboardComponent, ManagedAccount } from '../dashboard/dashboard.compo
 export class LoginComponent {
   loginSuccess = output<{ name: string; type: string; }>();
 
-  private fb: FormBuilder = inject(FormBuilder);
+  private fb = inject(FormBuilder);
+  private accountService = inject(AccountService);
 
   errorMessage = signal<string | null>(null);
   isLoading = signal(false);
-
-  // A temporary instance to access the initial account data.
-  // In a real-world app, this would be handled by a shared service.
-  private tempDashboard = new DashboardComponent();
-  private stationAccounts = this.tempDashboard.stationAccounts();
-  private chqAccounts = this.tempDashboard.chqAccounts();
-  private cpsmuAccounts = this.tempDashboard.cpsmuAccounts();
 
   loginForm = this.fb.group({
     username: ['', [Validators.required, Validators.minLength(3)]],
@@ -30,9 +24,9 @@ export class LoginComponent {
   });
 
   loginAccounts = computed(() => [
-      ...this.stationAccounts.map(a => ({ ...a, type: 'Station Account' })),
-      ...this.chqAccounts.map(a => ({ ...a, type: 'CHQ Account' })),
-      ...this.cpsmuAccounts.map(a => ({ ...a, type: 'CPSMU Account' })),
+      ...this.accountService.stationAccounts(),
+      ...this.accountService.chqAccounts(),
+      ...this.accountService.cpsmuAccounts(),
   ]);
 
   onSubmit(): void {
@@ -59,10 +53,10 @@ export class LoginComponent {
       
       // Other User Accounts Check
       const userAccount = this.loginAccounts().find(
-        (acc: ManagedAccount) => acc.username === username && acc.password === password
+        (acc) => acc.username === username && acc.password === password
       );
 
-      if (userAccount) {
+      if (userAccount && userAccount.type) {
         this.loginSuccess.emit({ name: userAccount.name, type: userAccount.type });
         this.loginForm.reset({ username: '', password: '' });
       } else {
