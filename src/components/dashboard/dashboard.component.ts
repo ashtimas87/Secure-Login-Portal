@@ -8,7 +8,8 @@ import { AccountService, ManagedAccount } from '../../services/account.service';
 
 @Component({
   selector: 'app-dashboard',
-  templateUrl: './dashboard.component.html',
+  standalone: true,
+  templateUrl: 'dashboard.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OperationalDashboardComponent, TacticalDashboardComponent, ReactiveFormsModule, CommonModule],
   host: {

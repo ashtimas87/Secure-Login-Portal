@@ -6,7 +6,8 @@ import { User } from '../../app.component';
 
 @Component({
   selector: 'app-login',
-  templateUrl: './login.component.html',
+  standalone: true,
+  templateUrl: 'login.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, CommonModule]
 })

@@ -7,7 +7,8 @@ import { DashboardDataService } from '../../services/dashboard-data.service';
 
 @Component({
   selector: 'app-tactical-dashboard',
-  templateUrl: './tactical-dashboard.component.html',
+  standalone: true,
+  templateUrl: 'tactical-dashboard.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule],
 })

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc && cp index.html metadata.json dist/"
+    "build": "tsc && copyfiles src/**/*.html dist && cp index.html metadata.json dist/"
   },
   "devDependencies": {
     "@angular/common": "^18.0.0",
@@ -12,6 +12,7 @@
     "@angular/core": "^18.0.0",
     "@angular/forms": "^18.0.0",
     "@angular/platform-browser": "^18.0.0",
+    "copyfiles": "^2.4.1",
     "rxjs": "~7.8.0",
     "typescript": "~5.4.2"
   }

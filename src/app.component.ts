@@ -11,7 +11,8 @@ export interface User {
 
 @Component({
   selector: 'app-root',
-  templateUrl: './app.component.html',
+  standalone: true,
+  templateUrl: 'app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, LoginComponent, DashboardComponent]
 })
