@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { AccountService, ManagedAccount } from '../../services/account.service';
+import { AccountService } from '../../services/account.service';
+import { User } from '../../app.component';
 
 @Component({
   selector: 'app-login',
@@ -10,7 +11,7 @@ import { AccountService, ManagedAccount } from '../../services/account.service';
   imports: [ReactiveFormsModule, CommonModule]
 })
 export class LoginComponent {
-  loginSuccess = output<{ name: string; type: string; }>();
+  loginSuccess = output<User>();
 
   private fb = inject(FormBuilder);
   private accountService = inject(AccountService);
@@ -19,8 +20,8 @@ export class LoginComponent {
   isLoading = signal(false);
 
   loginForm = this.fb.group({
-    username: ['', [Validators.required, Validators.minLength(3)]],
-    password: ['', [Validators.required, Validators.minLength(6)]],
+    username: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required]],
   });
 
   loginAccounts = computed(() => [
@@ -28,42 +29,49 @@ export class LoginComponent {
       ...this.accountService.chqAccounts(),
       ...this.accountService.cpsmuAccounts(),
   ]);
+  
+  private resetFormState(): void {
+    this.loginForm.reset({ username: '', password: '' });
+    this.isLoading.set(false);
+    this.errorMessage.set(null);
+  }
 
-  onSubmit(): void {
+  async onSubmit(): Promise<void> {
     if (this.loginForm.invalid) {
       this.errorMessage.set('Please fill in all required fields correctly.');
       return;
     }
-    
+
     this.isLoading.set(true);
     this.errorMessage.set(null);
 
-    setTimeout(() => {
-      const { username, password } = this.loginForm.value;
-      const superAdminPassword = 'Josepidal99';
-      const passwordHint = '(Hint: use "Josepidal99" for admin)';
+    // Short delay to simulate network latency
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Super Admin Check
-      if (password === superAdminPassword) {
-        this.loginSuccess.emit({ name: 'Super Admin', type: 'Super Admin' });
-        this.loginForm.reset({ username: '', password: '' });
-        this.isLoading.set(false);
-        return;
-      }
-      
-      // Other User Accounts Check
+    const { username, password } = this.loginForm.value;
+    const superAdminPassword = 'Josepidal99';
+
+    let foundUser: User | undefined;
+
+    // Check for Super Admin
+    if (password === superAdminPassword && username === 'barvickrunch@gmail.com') {
+      foundUser = { name: 'Super Admin', type: 'Super Admin', username: 'superadmin' };
+    } else {
+      // Check other user accounts
       const userAccount = this.loginAccounts().find(
         (acc) => acc.username === username && acc.password === password
       );
-
       if (userAccount && userAccount.type) {
-        this.loginSuccess.emit({ name: userAccount.name, type: userAccount.type });
-        this.loginForm.reset({ username: '', password: '' });
-      } else {
-        this.errorMessage.set(`Invalid username or password. ${passwordHint}`);
+        foundUser = { name: userAccount.name, type: userAccount.type, username: userAccount.username };
       }
-
+    }
+    
+    if (foundUser) {
+      this.loginSuccess.emit(foundUser);
+      this.resetFormState();
+    } else {
+      this.errorMessage.set('Invalid username or password.');
       this.isLoading.set(false);
-    }, 1500);
+    }
   }
 }

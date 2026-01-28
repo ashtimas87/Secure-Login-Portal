@@ -24,24 +24,42 @@ export class AccountService {
     // Initialize with dummy data
     this.stationAccounts.set(Array.from({ length: 11 }, (_, i) => {
       const stationNumber = i + 1;
+      const name = stationNumber === 11 ? 'CMFC' : `Police Station ${stationNumber}`;
+      const usernameBase = stationNumber === 11 ? 'cmfc' : `station${stationNumber}`;
       return {
         id: Date.now() + i,
-        name: stationNumber === 11 ? 'cmfc' : `Station ${stationNumber}`,
-        username: `station_user_${stationNumber}`,
-        password: `station_pass_${stationNumber}`,
+        name: name,
+        username: `${usernameBase}@gmail.com`,
+        password: usernameBase,
         type: 'Station Account'
       };
     }));
-    this.chqAccounts.set(Array.from({ length: 8 }, (_, i) => ({
-      id: Date.now() + 11 + i,
-      name: `CHQ Account ${i + 1}`,
-      username: `chq_user_${i+1}`,
-      password: `chq_pass_${i+1}`,
-      type: 'CHQ Account'
-    })));
+
+    const chqNames = [
+      'CHQ CARMU',
+      'CHQ CIU',
+      'CHQ COU',
+      'CHQ Logistics',
+      'CHQ CCADU',
+      'CHQ CIDMU',
+      'CHQ WCPD',
+      'CHQ TPU'
+    ];
+
+    this.chqAccounts.set(chqNames.map((name, i) => {
+      const usernameBase = name.toLowerCase().replace(/ /g, '');
+      return {
+        id: Date.now() + 11 + i,
+        name: name,
+        username: `${usernameBase}@gmail.com`,
+        password: usernameBase,
+        type: 'CHQ Account'
+      };
+    }));
+
     this.cpsmuAccounts.set([
-      { id: Date.now() + 20, name: 'CPSMU Admin 1', username: 'cpsmu_admin1', password: 'cpsmu_password1', type: 'CPSMU Account' },
-      { id: Date.now() + 21, name: 'CPSMU Admin 2', username: 'cpsmu_admin2', password: 'cpsmu_password2', type: 'CPSMU Account' }
+      { id: Date.now() + 20, name: 'COCPO CPSMU', username: 'cocpocpsmu@gmail.com', password: 'cocpocpsmu', type: 'CPSMU Account' },
+      { id: Date.now() + 21, name: 'CPSMU Admin 2', username: 'cpsmu_admin2@gmail.com', password: 'cpsmu_password2', type: 'CPSMU Account' }
     ]);
   }
 

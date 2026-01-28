@@ -24,11 +24,18 @@ export class DashboardComponent {
 
   canManageAccounts = computed(() => this.user()?.type === 'Super Admin');
 
+  canViewConsolidatedDashboards = computed(() => {
+    const userType = this.user()?.type;
+    return userType === 'Super Admin' || userType === 'CPSMU Account';
+  });
+
   isDashboardView = computed(() => this.currentView() === 'operationalDashboard' || this.currentView() === 'tacticalDashboard');
 
   // State for the current view in the main panel
-  currentView = signal<'welcome' | 'accountManagement' | 'operationalDashboard' | 'tacticalDashboard'>('welcome');
+  currentView = signal<'welcome' | 'accountManagement' | 'operationalDashboard' | 'tacticalDashboard' | 'overview'>('welcome');
   deviceView = signal<'desktop' | 'tablet' | 'mobile'>('desktop');
+  viewingUser = signal<User | null>(null);
+  dashboardTitle = signal('Operational Dashboard 2025');
 
   // State for accounts from service
   stationAccounts = this.accountService.stationAccounts;
@@ -44,7 +51,7 @@ export class DashboardComponent {
   accountForm = this.fb.group({
     id: [0],
     name: ['', Validators.required],
-    username: ['', Validators.required],
+    username: ['', [Validators.required, Validators.email]],
     password: [''],
   });
 
@@ -68,21 +75,58 @@ export class DashboardComponent {
   }
   
   showWelcome(): void {
+    this.viewingUser.set(null);
     this.currentView.set('welcome');
   }
 
   showAccountManagement(): void {
     if (this.canManageAccounts()) {
+      this.viewingUser.set(null);
       this.currentView.set('accountManagement');
     }
   }
 
   showOperationalDashboard(): void {
+    this.viewingUser.set(null);
+    this.dashboardTitle.set('Operational Dashboard 2025');
+    this.currentView.set('operationalDashboard');
+  }
+  
+  showChqOperationalDashboard(): void {
+    this.viewingUser.set(null);
+    this.dashboardTitle.set('CHQ Operational Dashboard 2025');
     this.currentView.set('operationalDashboard');
   }
 
   showTacticalDashboard(): void {
+    this.viewingUser.set(null);
     this.currentView.set('tacticalDashboard');
+  }
+
+  showOverview(): void {
+    if (this.canViewConsolidatedDashboards()) {
+      this.viewingUser.set(null);
+      this.currentView.set('overview');
+    }
+  }
+
+  viewUserDashboard(account: ManagedAccount): void {
+    if (!this.canViewConsolidatedDashboards() && this.user().type !== 'Super Admin') return;
+    if (!account.type) return;
+
+    const userToView: User = {
+      name: account.name,
+      type: account.type,
+      username: account.username,
+    };
+    this.viewingUser.set(userToView);
+    
+    if (account.type === 'Station Account') {
+      this.currentView.set('tacticalDashboard');
+    } else { // For CHQ accounts
+      this.dashboardTitle.set('Operational Dashboard 2025');
+      this.currentView.set('operationalDashboard');
+    }
   }
 
   // Modal methods
@@ -171,7 +215,7 @@ export class DashboardComponent {
   deleteAccount(account: ManagedAccount, type: 'station' | 'chq' | 'cpsmu'): void {
     if (!this.canManageAccounts()) return;
     
-    if (!confirm(`Are you sure you want to delete "${account.name}" (@${account.username})?`)) {
+    if (!confirm(`Are you sure you want to delete "${account.name}" (${account.username})?`)) {
       return;
     }
     this.accountService.deleteAccount(type, account.id);

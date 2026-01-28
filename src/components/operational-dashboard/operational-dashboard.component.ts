@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { PI_DATA, PerformanceIndicator, MonthlyAccomplishments, Activity } from './operational-dashboard.data';
+import { PerformanceIndicator, MonthlyAccomplishments, Activity } from './operational-dashboard.data';
 import { User } from '../../app.component';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { DashboardDataService } from '../../services/dashboard-data.service';
 
 @Component({
   selector: 'app-operational-dashboard',
@@ -11,38 +12,91 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
   imports: [CommonModule, ReactiveFormsModule],
 })
 export class OperationalDashboardComponent {
+  title = input<string>('Operational Dashboard 2025');
   user = input.required<User>();
-  canManage = computed(() => ['Super Admin', 'CPSMU Account'].includes(this.user().type));
+  sessionUser = input.required<User>();
+  isReadOnly = input<boolean>(false);
+  
+  private dataService = inject(DashboardDataService);
+  private fb: FormBuilder = inject(FormBuilder);
+
+  canCreateActivity = computed(() => {
+    if (this.isReadOnly()) {
+      return false;
+    }
+    return this.sessionUser().type === 'Super Admin';
+  });
+
+  canManage = computed(() => {
+    if (this.isReadOnly()) {
+      return false;
+    }
+    const userType = this.user().type;
+    return userType === 'CHQ Account';
+  });
+  
+  isConsolidatedView = computed(() => {
+    const userType = this.user().type;
+    return userType === 'Super Admin' || userType === 'CPSMU Account';
+  });
 
   performanceIndicators = signal<PerformanceIndicator[]>([]);
   activeTab = signal(1);
 
-  editingTitle = signal(false);
   editingActivity = signal<Activity | null>(null);
   activityForm: FormGroup;
-  // FIX: Explicitly type FormBuilder as it was not being correctly inferred.
-  private fb: FormBuilder = inject(FormBuilder);
+
+  // File Modal State
+  isFileModalOpen = signal(false);
+  selectedFileContext = signal<{ activity: Activity; month: string } | null>(null);
+  uploadedFiles = signal<Record<string, { name: string; dataUrl: string }[]>>({});
 
   activePIData = computed(() => {
     return this.performanceIndicators().find(pi => pi.id === this.activeTab());
+  });
+  
+  currentFiles = computed(() => {
+      const context = this.selectedFileContext();
+      if (!context || !context.activity.id) return [];
+      const key = `${context.activity.id}-${context.month}`;
+      return this.uploadedFiles()[key] || [];
   });
 
   tableHeaders = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Total'];
 
   constructor() {
-    const initialData = this.addUniqueIdsToActivities(PI_DATA);
-    this.performanceIndicators.set(this.processPiData(initialData));
-
     this.activityForm = this.fb.group({
       name: ['', Validators.required],
       indicator: ['', Validators.required],
       accomplishments: this.fb.group({
-        Jan: ['', Validators.required], Feb: ['', Validators.required], Mar: ['', Validators.required],
-        Apr: ['', Validators.required], May: ['', Validators.required], Jun: ['', Validators.required],
-        Jul: ['', Validators.required], Aug: ['', Validators.required], Sep: ['', Validators.required],
-        Oct: ['', Validators.required], Nov: ['', Validators.required], Dec: ['', Validators.required]
+        Jan: [''], Feb: [''], Mar: [''],
+        Apr: [''], May: [''], Jun: [''],
+        Jul: [''], Aug: [''], Sep: [''],
+        Oct: [''], Nov: [''], Dec: ['']
       })
     });
+
+    effect(() => {
+      this.loadDataForUser();
+    });
+  }
+
+  loadDataForUser(): void {
+    const currentUser = this.user();
+    let data: PerformanceIndicator[] | undefined;
+
+    if (this.isConsolidatedView()) {
+      data = this.dataService.getConsolidatedData();
+    } else {
+      data = this.dataService.getDataForUser(currentUser.username);
+    }
+    
+    if (data) {
+      const initialData = this.addUniqueIdsToActivities(data);
+      this.performanceIndicators.set(this.processPiData(initialData));
+    } else {
+      this.performanceIndicators.set([]);
+    }
   }
 
   private addUniqueIdsToActivities(data: PerformanceIndicator[]): PerformanceIndicator[] {
@@ -63,10 +117,9 @@ export class OperationalDashboardComponent {
         let total: string | number;
 
         if (values.every(v => !isNaN(Number(v)))) {
-          // FIX: Explicitly type the accumulator in reduce to prevent type inference errors.
           total = values.reduce((sum: number, current) => sum + Number(current), 0);
         } else {
-          total = values.length > 0 ? values[0] as string : ''; 
+          total = 'N/A'; 
         }
         
         return {
@@ -77,23 +130,32 @@ export class OperationalDashboardComponent {
 
       let piTotal: MonthlyAccomplishments | undefined = undefined;
       
-      if (pi.id === 18 || pi.id === 20) {
-          piTotal = { Jan: '100%', Feb: '100%', Mar: '100%', Apr: '100%', May: '100%', Jun: '100%', Jul: '100%', Aug: '100%', Sep: '100%', Oct: '100%', Nov: '100%', Dec: '100%', Total: '100%'};
-      } else {
-          const monthlyTotals: Record<keyof Omit<MonthlyAccomplishments, 'Total'>, number> = { Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0 };
-          
-          for (const activity of activitiesWithTotals) {
-              for (const month of this.tableHeaders.slice(0, 12) as (keyof typeof monthlyTotals)[]) {
-                  const value = activity.accomplishments[month];
-                  if (typeof value === 'number' || !isNaN(Number(value))) {
-                      monthlyTotals[month] += Number(value);
-                  }
+      const monthlyTotals: Record<keyof Omit<MonthlyAccomplishments, 'Total'>, number> = { Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0 };
+      let hasNonNumeric = false;
+      
+      for (const activity of activitiesWithTotals) {
+          for (const month of this.tableHeaders.slice(0, 12) as (keyof typeof monthlyTotals)[]) {
+              const value = activity.accomplishments[month];
+              if (typeof value === 'number' || !isNaN(Number(value))) {
+                  monthlyTotals[month] += Number(value);
+              } else {
+                  hasNonNumeric = true;
               }
           }
+      }
 
+      if (hasNonNumeric) {
+          const totalsWithMixedTypes: any = {};
+          this.tableHeaders.slice(0,12).forEach(m => {
+              totalsWithMixedTypes[m] = 'N/A';
+          });
+          totalsWithMixedTypes['Total'] = 'N/A';
+          piTotal = totalsWithMixedTypes;
+      } else {
           const grandTotal = Object.values(monthlyTotals).reduce((sum, monthTotal) => sum + monthTotal, 0);
           piTotal = { ...monthlyTotals, Total: grandTotal };
       }
+
 
       return {
         ...pi,
@@ -106,24 +168,18 @@ export class OperationalDashboardComponent {
   selectTab(piNumber: number): void {
     this.activeTab.set(piNumber);
     this.cancelEdit();
-    this.editingTitle.set(false);
+  }
+
+  isAccomplishmentNumeric(month: string): boolean {
+    const value = this.activityForm.get('accomplishments')?.get(month)?.value;
+    // This correctly handles numbers, numeric strings, and empty strings as "numeric" for input purposes,
+    // and non-numeric strings like "100%" as non-numeric.
+    return !isNaN(Number(value));
   }
 
   // --- CRUD Methods ---
-  saveTitle(newTitle: string): void {
-    if (!newTitle.trim()) return;
-    this.performanceIndicators.update(pis => {
-      return pis.map(pi => {
-        if (pi.id === this.activeTab()) {
-          return { ...pi, title: newTitle.trim() };
-        }
-        return pi;
-      });
-    });
-    this.editingTitle.set(false);
-  }
-
   startCreate(): void {
+    if (!this.canCreateActivity()) return;
     if (this.editingActivity()) {
       this.cancelEdit();
     }
@@ -154,6 +210,7 @@ export class OperationalDashboardComponent {
   }
 
   startEdit(activity: Activity): void {
+    if (!this.canManage()) return;
     if (this.editingActivity()) {
       this.cancelEdit();
     }
@@ -164,9 +221,7 @@ export class OperationalDashboardComponent {
 
   cancelEdit(): void {
     const activityBeingEdited = this.editingActivity();
-    // Use a high number threshold to identify temporary IDs from Date.now()
     if (activityBeingEdited && activityBeingEdited.id > 100000) { 
-      // This is a new activity that was cancelled, so remove it from the array.
       this.performanceIndicators.update(currentPIs => {
         const pisCopy = JSON.parse(JSON.stringify(currentPIs));
         const piToUpdate = pisCopy.find((p: PerformanceIndicator) => p.id === this.activeTab());
@@ -181,7 +236,7 @@ export class OperationalDashboardComponent {
   }
 
   saveEdit(): void {
-    if (this.activityForm.invalid || !this.editingActivity()) return;
+    if (this.activityForm.invalid || !this.editingActivity() || !this.canManage()) return;
 
     const updatedActivityData = this.activityForm.getRawValue();
     const originalActivityId = this.editingActivity()!.id;
@@ -194,19 +249,20 @@ export class OperationalDashboardComponent {
         const activityIndex = piToUpdate.activities.findIndex((a: Activity) => a.id === originalActivityId);
         if (activityIndex > -1) {
           const originalActivity = piToUpdate.activities[activityIndex];
-          // For new items, the ID will be replaced by processPiData
-          const finalId = originalActivity.id > 100000 ? 0 : originalActivity.id; 
+          const finalId = originalActivity.id > 100000 ? (piToUpdate.id * 1000 + piToUpdate.activities.length) : originalActivity.id; 
           piToUpdate.activities[activityIndex] = { ...originalActivity, ...updatedActivityData, id: finalId };
         }
       }
-      return this.processPiData(pisCopy);
+      const processedData = this.processPiData(pisCopy);
+      this.dataService.updateDataForUser(this.user().username, processedData);
+      return processedData;
     });
 
     this.cancelEdit();
   }
 
   deleteActivity(activityToDelete: Activity): void {
-    if (!confirm(`Are you sure you want to delete the activity "${activityToDelete.name}"?`)) return;
+    if (!this.canManage() || !confirm(`Are you sure you want to delete the activity "${activityToDelete.name}"?`)) return;
 
     this.performanceIndicators.update(currentPIs => {
        const pisCopy = JSON.parse(JSON.stringify(currentPIs));
@@ -215,7 +271,118 @@ export class OperationalDashboardComponent {
        if (piToUpdate) {
          piToUpdate.activities = piToUpdate.activities.filter((act: Activity) => act.id !== activityToDelete.id);
        }
-       return this.processPiData(pisCopy);
+       const processedData = this.processPiData(pisCopy);
+       this.dataService.updateDataForUser(this.user().username, processedData);
+       return processedData;
     });
+  }
+
+  // --- File Management Methods ---
+  openFileUploadModal(activity: Activity, month: string): void {
+    this.selectedFileContext.set({ activity, month });
+    this.isFileModalOpen.set(true);
+  }
+
+  closeFileModal(): void {
+    this.isFileModalOpen.set(false);
+    this.selectedFileContext.set(null);
+  }
+
+  handleFileUpload(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const files = Array.from(input.files);
+    const context = this.selectedFileContext();
+    if (!context || !context.activity.id) {
+      return;
+    }
+
+    const key = `${context.activity.id}-${context.month}`;
+
+    const filesToAdd: { name: string, dataUrl: string }[] = [];
+    let filesProcessed = 0;
+
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        filesToAdd.push({ name: file.name, dataUrl: reader.result as string });
+        filesProcessed++;
+
+        if (filesProcessed === files.length) {
+          // All files are read, now update the signal once.
+          let newFileCount = 0;
+          this.uploadedFiles.update(currentFiles => {
+            const newFiles = { ...currentFiles };
+            const existing = newFiles[key] || [];
+            
+            // Filter out duplicates
+            const uniqueNewFiles = filesToAdd.filter(newFile => !existing.some(f => f.name === newFile.name));
+
+            if(uniqueNewFiles.length > 0) {
+                newFiles[key] = [...existing, ...uniqueNewFiles];
+            }
+            
+            newFileCount = newFiles[key]?.length || 0;
+            return newFiles;
+          });
+          this.updateAccomplishmentWithFileCount(context.activity, context.month, newFileCount);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    input.value = '';
+  }
+
+  deleteFile(fileNameToDelete: string): void {
+    const context = this.selectedFileContext();
+    if (!context || !context.activity.id) {
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete the file "${fileNameToDelete}"?`)) {
+      return;
+    }
+
+    const key = `${context.activity.id}-${context.month}`;
+    
+    let newFileCount = 0;
+    this.uploadedFiles.update(currentFiles => {
+      const newFiles = { ...currentFiles };
+      if (newFiles[key]) {
+        newFiles[key] = newFiles[key].filter(f => f.name !== fileNameToDelete);
+        newFileCount = newFiles[key].length;
+      }
+      return newFiles;
+    });
+
+    this.updateAccomplishmentWithFileCount(context.activity, context.month, newFileCount);
+  }
+
+  private updateAccomplishmentWithFileCount(activityToUpdate: Activity, month: string, count: number): void {
+    if (!this.canManage() || !activityToUpdate.id) return;
+
+    this.performanceIndicators.update(currentPIs => {
+      const pisCopy = JSON.parse(JSON.stringify(currentPIs));
+      
+      for (const pi of pisCopy) {
+        const activityIndex = pi.activities.findIndex((a: Activity) => a.id === activityToUpdate.id);
+        if (activityIndex > -1) {
+          const monthKey = month as keyof MonthlyAccomplishments;
+          (pi.activities[activityIndex].accomplishments as any)[monthKey] = count;
+          break; 
+        }
+      }
+
+      const processedData = this.processPiData(pisCopy);
+      this.dataService.updateDataForUser(this.user().username, processedData);
+      return processedData;
+    });
+
+    if (this.editingActivity()?.id === activityToUpdate.id) {
+      this.activityForm.get('accomplishments')?.get(month)?.setValue(count, { emitEvent: false });
+    }
   }
 }

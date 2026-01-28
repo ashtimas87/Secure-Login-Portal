@@ -6,6 +6,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 export interface User {
   name: string;
   type: string;
+  username: string;
 }
 
 @Component({
